@@ -2,37 +2,76 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skaner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Skaner Pro</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script src="https://unpkg.com/@zxing/library@0.19.1/dist/index.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #f4f4f9; }
-        #video { width: 100%; max-width: 500px; border: 5px solid #0088cc; border-radius: 15px; }
-        .status { margin-top: 15px; font-weight: bold; color: #555; }
+        body { margin: 0; padding: 0; background-color: #1a1a1a; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #video { width: 90%; max-width: 400px; height: auto; border: 2px solid #0088cc; border-radius: 12px; display: none; }
+        .loading { font-size: 18px; margin-bottom: 10px; }
+        .error-log { color: #ff4d4d; font-size: 12px; padding: 10px; word-break: break-all; }
+        .btn-retry { display: none; padding: 10px 20px; background: #0088cc; color: white; border: none; border-radius: 5px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <h2>Mahsulotni skanerlang</h2>
+
+    <div id="loading" class="loading">Kamera yuklanmoqda...</div>
     <video id="video"></video>
-    <div class="status" id="status">Kamerani shtrix-kodga qarating...</div>
+    <div id="error" class="error-log"></div>
+    <button id="retryBtn" class="btn-retry" onclick="location.reload()">Qayta yuklash</button>
 
     <script>
-        const codeReader = new ZXing.BrowserMultiFormatReader();
-        const statusEl = document.getElementById('status');
         const tg = window.Telegram.WebApp;
+        const video = document.getElementById('video');
+        const loading = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const retryBtn = document.getElementById('retryBtn');
 
-        // Telegram Web App-ni kengaytirish
         tg.expand();
 
-        codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
-            if (result) {
-                // Kod topilganda botga yuborish
-                statusEl.innerText = "Kod aniqlandi: " + result.text;
-                tg.sendData(result.text); // Ma'lumotni botga yuboradi
-                tg.close(); // WebApp-ni yopadi
+        async function startScanner() {
+            try {
+                const codeReader = new ZXing.BrowserMultiFormatReader();
+                const videoInputDevices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+                
+                if (videoInputDevices.length === 0) {
+                    throw new Error("Kamera topilmadi!");
+                }
+
+                // Orqa kamerani tanlashga harakat qilamiz
+                const selectedDeviceId = videoInputDevices.length > 1 ? videoInputDevices[1].deviceId : videoInputDevices[0].deviceId;
+
+                loading.innerText = "Kamera tayyor. Shtrix-kodni ko'rsating.";
+                video.style.display = "block";
+
+                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                    if (result) {
+                        console.log(result.text);
+                        tg.sendData(result.text);
+                        tg.close();
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error(err);
+                    }
+                });
+
+            } catch (e) {
+                loading.style.display = "none";
+                errorEl.innerText = "Xatolik: " + e.message;
+                retryBtn.style.display = "block";
             }
-        });
+        }
+
+        // Kutubxona yuklanishini kutamiz
+        window.onload = () => {
+            if (typeof ZXing !== 'undefined') {
+                startScanner();
+            } else {
+                errorEl.innerText = "Skaner kutubxonasi yuklanmadi. Internetni tekshiring.";
+                retryBtn.style.display = "block";
+            }
+        };
     </script>
 </body>
 </html>
